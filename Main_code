@@ -1,0 +1,156 @@
+package lab1;
+
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.stage.Stage;
+import lab3.Lab3;
+
+import java.util.Arrays;
+import java.util.Random;
+import java.util.function.DoubleFunction;
+
+public class Main extends Application {
+    private double minX = -0.1;
+    private double maxX = 1.1;
+    private double minY = -0.3;
+    private double maxY = 2.1;
+
+    private Canvas canvas = new Canvas(500, 1000);
+    private Interpolator xInterpolator;
+    private Interpolator yInterpolator;
+
+    private double testFunc(double t) {
+        return Math.sin(t) + Math.exp(t / 10);
+    }
+
+    private static Lab3 instance;
+    private static int seed = 0;
+
+    public static double[] sidеDiagonal(double[][] _) {
+        double[][] mat =  instance.phiMatrix();
+        double[] diag = Lab3.sideDiagonal(mat);
+        Random rand = new Random();
+        rand.setSeed(diag.length + seed);
+        seed++;
+        double h = 1.0 / instance.steps;
+        for (int i = 0; i < diag.length; i++) {
+            if (diag[i] != 0.0) {
+                diag[i] += rand.nextDouble() * h * h * 0.1;
+            }
+        }
+        return diag;
+    }
+
+    public static void init(Lab3 instance) {
+        Main.instance = instance;
+    }
+
+    @Override
+    public void start(Stage primaryStage) throws Exception {
+        BorderPane borderPane = new BorderPane();
+        Scene scene = new Scene(borderPane, canvas.getWidth(), canvas.getHeight());
+        borderPane.setCenter(canvas);
+        primaryStage.setScene(scene);
+
+        int size = 11;
+        Lab1 lab = new Lab1(size, 0.019, 1.0 / (size - 1), 1.0 / (size - 1));
+        double[][] mesh = lab.calculate();
+
+        double[][] trueMesh = new double[size][size];
+        for (int i = 0; i < trueMesh.length; i++) {
+            for (int j = 0; j < size; j++) {
+                trueMesh[i][j] = lab.u(j * lab.h, i * lab.tau);
+            }
+        }
+
+        System.out.println("true");
+        System.out.println(Arrays.deepToString(trueMesh).replace("], ", "]\n"));
+
+        System.out.println("calculated");
+        System.out.println(Arrays.deepToString(mesh).replace("], ", "]\n"));
+
+
+        setParams();
+        drawAxes();
+        drawFunc(val -> lab.u(0.5, val));
+        drawColumn(mesh, size / 2, 1.0 / (size - 1));
+
+        primaryStage.show();
+
+        for (int i = 0; i < size; i++) {
+            double delta = trueMesh[i][size / 2] - mesh[i][size / 2];
+            System.out.println("delta at time step " + i + ": " + Math.abs(delta));
+        }
+    }
+
+    private void setParams() {
+        double range = maxX - minX;
+        xInterpolator = new Interpolator(0, canvas.getWidth(), minX, maxX);
+        yInterpolator = new Interpolator(canvas.getHeight(), 0, minY, maxY);
+    }
+
+    private void drawAxes() {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setStroke(Color.GRAY);
+        gc.setLineWidth(3);
+
+        gc.strokeLine(xInterpolator.toLinear(0), 0, xInterpolator.toLinear(0), canvas.getHeight());
+        gc.strokeLine(0, yInterpolator.toLinear(0), canvas.getWidth(), yInterpolator.toLinear(0));
+
+        gc.setFont(new Font("Arial", 30));
+
+        gc.fillText("0", xInterpolator.toLinear(0.02), yInterpolator.toLinear(0.02));
+
+        gc.strokeLine(xInterpolator.toLinear(0.5), yInterpolator.toLinear(-0.03), xInterpolator.toLinear(0.5), yInterpolator.toLinear(0.03));
+        gc.fillText("0.5", xInterpolator.toLinear(0.5 - 0.05), yInterpolator.toLinear(0.05));
+
+        gc.strokeLine(xInterpolator.toLinear(1), yInterpolator.toLinear(-0.03), xInterpolator.toLinear(1), yInterpolator.toLinear(0.03));
+        gc.fillText("1", xInterpolator.toLinear(1), yInterpolator.toLinear(0.05));
+
+        gc.strokeLine(xInterpolator.toLinear(-0.03), yInterpolator.toLinear(0.5), xInterpolator.toLinear(0.03), yInterpolator.toLinear(0.5));
+        gc.fillText("0.5", xInterpolator.toLinear(0.05), yInterpolator.toLinear(0.5 - 0.03));
+
+        gc.strokeLine(xInterpolator.toLinear(-0.03), yInterpolator.toLinear(1), xInterpolator.toLinear(0.03), yInterpolator.toLinear(1));
+        gc.fillText("1", xInterpolator.toLinear(0.05), yInterpolator.toLinear(1 - 0.03));
+
+        gc.strokeLine(xInterpolator.toLinear(-0.03), yInterpolator.toLinear(1.5), xInterpolator.toLinear(0.03), yInterpolator.toLinear(1.5));
+        gc.fillText("1.5", xInterpolator.toLinear(0.05), yInterpolator.toLinear(1.5 - 0.03));
+
+        gc.strokeLine(xInterpolator.toLinear(-0.03), yInterpolator.toLinear(2), xInterpolator.toLinear(0.03), yInterpolator.toLinear(2));
+        gc.fillText("2", xInterpolator.toLinear(0.05), yInterpolator.toLinear(2 - 0.03));
+    }
+
+    private void drawFunc(DoubleFunction<Double> func) {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setLineWidth(1);
+        gc.beginPath();
+        gc.setStroke(Color.BLACK);
+        gc.moveTo(0, yInterpolator.toLinear(func.apply(xInterpolator.toValue(0))));
+        int width = (int) canvas.getWidth();
+        for (int i = 1; i <= width; i++) {
+            double x = xInterpolator.toValue(i);
+            double s = yInterpolator.toLinear(func.apply(x));
+            gc.lineTo(i, s);
+        }
+        gc.stroke();
+    }
+
+    private void drawColumn(double[][] mesh, int column, double step) {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+        gc.setLineWidth(1);
+        gc.beginPath();
+        gc.setStroke(Color.BLUE);
+        gc.moveTo(xInterpolator.toLinear(0.0), yInterpolator.toLinear(mesh[0][column]));
+        for (int i = 0; i < mesh.length; i++) {
+            double t = xInterpolator.toLinear(i * step);
+            double s = yInterpolator.toLinear(mesh[i][column]);
+            gc.lineTo(t, s);
+        }
+        gc.stroke();
+    }
+}
