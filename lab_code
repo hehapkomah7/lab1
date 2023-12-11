@@ -1,0 +1,140 @@
+package lab1;
+
+import java.util.Arrays;
+
+public class Lab1 {
+    public static void main(String[] args) {
+        int size = 11;
+        Lab1 lab = new Lab1(size, 0.019, 1.0 / (size - 1), 1.0 / (size - 1));
+        double[][] mesh = lab.calculate();
+
+        double[][] trueMesh = new double[size][size];
+        for (int i = 0; i < trueMesh.length; i++) {
+            for (int j = 0; j < size; j++) {
+                trueMesh[i][j] = lab.u(j * lab.h, i * lab.tau);
+            }
+        }
+
+        System.out.println("true");
+        System.out.println(Arrays.deepToString(trueMesh).replace("], ", "]\n"));
+
+        System.out.println("calculated");
+        System.out.println(Arrays.deepToString(mesh).replace("], ", "]\n"));
+
+//        System.out.println("true");
+//        System.out.println(Arrays.toString(trueMesh[4]));
+//
+//        System.out.println("calculated");
+//        System.out.println(Arrays.toString(mesh[4]));
+    }
+
+    public final int size;
+    public final double a;
+    public final double tau;
+    public final double h;
+
+    public Lab1(int size, double a, double tau, double h) {
+        this.size = size;
+        this.a = a;
+        this.tau = tau;
+        this.h = h;
+    }
+
+    public double u(double x, double t) {
+        return -2.0 * x * x * x * x - 3.0 * t * t * t + 3.0 * t * t * x + Math.exp(x);
+    }
+
+    public double f(double x, double t) {
+        return -9.0 * t * t + 6 * x * t - a * (-24.0 * x * x + Math.exp(x));
+    }
+
+    public double[][] calculate() {
+        double[][] mesh = new double[size][size];
+        fillStarting(mesh);
+        Progonka p = fillMatrix();
+        for (int i = 1; i < size; i++) {
+            fillRight(p, mesh[i - 1], i);
+            double[] row = p.solve();
+            for (int j = 0; j < row.length; j++) {
+                mesh[i][j + 1] = row[j];
+            }
+        }
+        return mesh;
+    }
+
+    private void fillStarting(double[][] mesh) {
+        for (int i = 0; i < size; i++) {
+            mesh[0][i] = u(i * h, 0.0);
+        }
+        for (int i = 0; i < size; i++) {
+            mesh[i][0] = u(0.0, i * tau);
+            mesh[i][size - 1] = u((size - 1) * h, i * tau);
+        }
+    }
+
+    private Progonka fillMatrix() {
+        Progonka result = new Progonka(size - 2);
+        double topBottomCoef = -a * tau / (2.0 * h * h);
+        double diagonalCoef = 1 + a * tau / (h * h);
+        for (int i = 0; i < result.diagonal.length; i++) {
+            result.diagonal[i] = diagonalCoef;
+            result.top[i] = topBottomCoef;
+            result.bottom[i] = topBottomCoef;
+        }
+        return result;
+    }
+
+    private void fillRight(Progonka progonka, double[] prevLevel, double timeN) {
+        for (int i = 1; i < size - 1; i++) {
+            progonka.right[i - 1] = prevLevel[i] + a * tau / (2 * h * h) * (prevLevel[i - 1] - 2 * prevLevel[i] + prevLevel[i + 1]) + tau * f(i * h, (timeN - 0.5) * tau);
+        }
+        progonka.right[0] -= -a * tau / (2 * h * h) * prevLevel[0];
+        progonka.right[progonka.right.length - 1] -= -a * tau / (2 * h * h) * prevLevel[prevLevel.length - 1];
+    }
+
+}
+
+class Progonka {
+    double[] diagonal;
+    double[] top;
+    double[] bottom;
+    double[] right;
+
+    public Progonka(int size) {
+        this.diagonal = new double[size];
+        this.top = new double[size];
+        this.bottom = new double[size];
+        this.right = new double[size];
+    }
+
+    public double[] solve() {
+        double[] y = new double[diagonal.length];
+        double[] alpha = new double[diagonal.length];
+        double[] beta = new double[diagonal.length];
+        y[0] = diagonal[0];
+        alpha[0] = -top[0] / y[0];
+        beta[0] = right[0] / y[0];
+
+        for (int i = 1; i < diagonal.length; i++) {
+            y[i] = diagonal[i] + bottom[i] * alpha[i - 1];
+            alpha[i] = -top[i] / y[i];
+            beta[i] = (right[i] - bottom[i] * beta[i - 1]) / y[i];
+        }
+
+        double[] result = new double[diagonal.length];
+        result[diagonal.length - 1] = beta[diagonal.length - 1];
+        for (int i = diagonal.length - 2; i >= 0; i--) {
+            result[i] = alpha[i] * result[i + 1] + beta[i];
+        }
+        return result;
+    }
+
+    public Progonka copy() {
+        Progonka result = new Progonka(diagonal.length);
+        result.diagonal = Arrays.copyOf(diagonal, diagonal.length);
+        result.top = Arrays.copyOf(top, diagonal.length);
+        result.bottom = Arrays.copyOf(bottom, diagonal.length);
+        result.right = Arrays.copyOf(right, diagonal.length);
+        return result;
+    }
+}
