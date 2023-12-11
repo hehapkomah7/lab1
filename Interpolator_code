@@ -1,0 +1,21 @@
+package lab1;
+
+class Interpolator {
+    private double valMin;
+    private double linMin;
+    private double alpha;
+
+    Interpolator(double linMin, double linMax, double valMin, double valMax) {
+        this.linMin = linMin;
+        this.valMin = valMin;
+        this.alpha = (valMax - valMin) / (linMax - linMin);
+    }
+
+    double toValue(double linear) {
+        return valMin + (linear - linMin) * alpha;
+    }
+
+    double toLinear(double value) {
+        return linMin + (value - valMin) / alpha;
+    }
+}
